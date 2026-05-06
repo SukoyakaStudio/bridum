@@ -34,9 +34,10 @@ A puzzle game where you draw bridges between tiles to merge their numbers. Built
 ├── manifest.json           # PWA manifest
 ├── sw.js                   # Service worker
 ├── privacy.html            # Privacy policy (EN/JA)
-├── icon_192.png
-├── icon_512.png
-└── icon_512_maskable.png
+└── icons/
+    ├── icon_192.png
+    ├── icon_512.png
+    └── icon_512_maskable.png
 ```
 
 ## Local Development
