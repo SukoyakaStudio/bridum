@@ -1,11 +1,11 @@
-const CACHE = 'bridum-v1';
+const CACHE = 'bridum-v2';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './icon_192.png',
-  './icon_512.png',
-  './icon_512_maskable.png',
+  './icons/icon_192.png',
+  './icons/icon_512.png',
+  './icons/icon_512_maskable.png',
 ];
 
 self.addEventListener('install', e => {
