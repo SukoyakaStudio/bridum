@@ -1,0 +1,2127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a1929">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bridum">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon_192.png">
+<title>Bridum</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; overflow: hidden;
+    font-family: 'Meiryo UI', 'Meiryo', 'Hiragino Sans', sans-serif;
+    background: #0a1929; color: #e3f2fd;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ===== Panel (translucent floating container) ===== */
+  .panel {
+    background: rgba(13, 71, 161, 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(100, 181, 246, 0.35);
+    border-radius: 14px;
+    padding: 12px 16px;
+    color: #e3f2fd;
+  }
+
+  /* ===== Buttons ===== */
+  button {
+    background: #1976d2; color: white; border: none;
+    padding: 10px 14px; border-radius: 10px;
+    font-family: inherit; font-size: 13px; font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:active { background: #0d47a1; transform: scale(0.96); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .toggle-btn {
+    background: rgba(100, 181, 246, 0.15);
+    border: 1px solid rgba(100, 181, 246, 0.35);
+    padding: 10px 8px; font-size: 12px;
+    color: #90caf9;
+    border-radius: 8px;
+  }
+  .toggle-btn:active { background: rgba(100, 181, 246, 0.30); }
+  .btn-danger {
+    background: rgba(244, 67, 54, 0.2);
+    border: 1px solid rgba(244, 67, 54, 0.5);
+    color: #ffcdd2;
+  }
+  .btn-danger:active { background: rgba(244, 67, 54, 0.4); }
+
+  /* ===== In-game top panel ===== */
+  #top-panel {
+    position: fixed;
+    top: 12px; left: 12px; right: 12px;
+    z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #top-panel .row {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px;
+  }
+  .stats { display: flex; gap: 18px; width: 100%; justify-content: space-around; }
+  .stat { display: flex; flex-direction: column; align-items: center; line-height: 1.2; }
+  .stat span { font-size: 11px; opacity: 0.75; }
+  .stat b {
+    font-size: 18px; font-weight: bold; margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat b.score-main { color: #ffe082; }
+  .stat b.len-5 { font-size: 16px; }
+  .stat b.len-6 { font-size: 14px; }
+  .stat b.len-7 { font-size: 13px; }
+  .btn-group {
+    display: flex; gap: 6px;
+    width: 100%;
+    justify-content: stretch;
+  }
+  .btn-group > button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* ===== Board area ===== */
+  #board-wrap {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    z-index: 1;
+  }
+  svg#board {
+    background: rgba(13, 71, 161, 0.4);
+    border: 1px solid rgba(100, 181, 246, 0.25);
+    border-radius: 14px;
+    width: 100%;
+    height: auto;
+    max-width: min(88vw, 88vh - 200px, 480px);
+    max-height: min(88vw, 88vh - 200px, 480px);
+    aspect-ratio: 1 / 1;
+    touch-action: none;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+  .grid-cell { fill: rgba(20, 35, 65, 0.8); }
+  .bridge-line { stroke: #c8d4f0; stroke-width: 4; stroke-linecap: round; pointer-events: none; }
+  .bridge-ready {
+    stroke: #ffe082;
+    filter: drop-shadow(0 0 4px rgba(255, 224, 130, 0.8));
+    animation: bridgePulse 1.2s ease-in-out infinite;
+  }
+  @keyframes bridgePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  .ghost-line { stroke: #fff; stroke-width: 3; stroke-dasharray: 6 6; opacity: 0.6; pointer-events: none; }
+  .ghost-line.invalid { stroke: #ff6b6b; }
+  .tile-circle { stroke: rgba(0,0,0,0.4); stroke-width: 2; }
+  .tile-text {
+    font-family: 'Meiryo UI', sans-serif;
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+  .tile-grabbed .tile-circle {
+    stroke: #fff;
+    stroke-width: 3.5;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.5));
+  }
+  @keyframes pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+  }
+  @keyframes spawn {
+    0%   { transform: scale(0); opacity: 0; }
+    50%  { transform: scale(1.2); opacity: 1; }
+    75%  { transform: scale(0.92); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .tile-merged { animation: pop 0.4s ease-out; transform-origin: center; transform-box: fill-box; }
+  .tile-spawned { animation: spawn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: center; transform-box: fill-box; }
+
+  /* Score floater: "+points" rising from a merged tile */
+  .score-floater {
+    fill: #ffe082;
+    font-family: 'Meiryo UI', sans-serif;
+    font-weight: 800;
+    font-size: 28px;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    pointer-events: none;
+    animation: scoreFloat 1.1s ease-out forwards;
+    transform-box: fill-box;
+    transform-origin: center;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));
+  }
+  @keyframes scoreFloat {
+    0%   { opacity: 0; transform: translateY(0) scale(0.5); }
+    20%  { opacity: 1; transform: translateY(-8px) scale(1.2); }
+    100% { opacity: 0; transform: translateY(-55px) scale(1.0); }
+  }
+
+  /* ===== MERGE button (bottom) ===== */
+  #merge-bar {
+    position: fixed;
+    bottom: 12px; left: 12px; right: 12px;
+    z-index: 10;
+  }
+  button.merge-btn {
+    width: 100%;
+    background: linear-gradient(180deg, #ffe082 0%, #f9a825 100%);
+    color: #3e2723;
+    border: none;
+    padding: 14px 16px;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(255, 224, 130, 0.3);
+    letter-spacing: 0.04em;
+  }
+  button.merge-btn:active {
+    background: linear-gradient(180deg, #f9a825 0%, #ef6c00 100%);
+    transform: translateY(1px);
+  }
+  button.merge-btn:disabled {
+    background: #2a3a60;
+    color: rgba(227, 242, 253, 0.5);
+    box-shadow: none;
+    animation: none;
+  }
+  button.merge-btn.ready:not(:disabled) {
+    animation: mergeReady 1.4s ease-in-out infinite;
+  }
+  @keyframes mergeReady {
+    0%, 100% { box-shadow: 0 3px 12px rgba(255, 224, 130, 0.3); }
+    50%      { box-shadow: 0 3px 22px rgba(255, 224, 130, 0.75), 0 0 28px rgba(255, 224, 130, 0.45); }
+  }
+  button.merge-btn .ready-badge {
+    display: inline-block;
+    margin-left: 8px;
+    background: rgba(0,0,0,0.2);
+    color: #fff;
+    padding: 1px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* ===== Toast ===== */
+  .toast {
+    position: fixed;
+    top: 110px;
+    left: 50%;
+    transform: translate(-50%, -10px);
+    background: rgba(13, 71, 161, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(144, 202, 249, 0.5);
+    border-radius: 12px;
+    padding: 8px 18px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.3s;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    white-space: nowrap;
+  }
+  .toast.show {
+    opacity: 0.95;
+    transform: translate(-50%, 0);
+  }
+  .toast.error { background: rgba(198, 40, 40, 0.92); }
+  .toast.win { background: rgba(46, 125, 50, 0.92); }
+  .toast.combo {
+    background: linear-gradient(135deg, #ffe082 0%, #f9a825 100%);
+    color: #3e2723;
+    border-color: rgba(255, 224, 130, 0.8);
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    padding: 10px 22px;
+    box-shadow: 0 4px 22px rgba(255, 224, 130, 0.5);
+  }
+  .toast.best {
+    background: linear-gradient(135deg, #ffd54f 0%, #ff8f00 100%);
+    color: #3e2723;
+    border-color: rgba(255, 213, 79, 0.85);
+    font-size: 15px;
+    font-weight: 800;
+    box-shadow: 0 4px 22px rgba(255, 152, 0, 0.5);
+  }
+
+  /* ===== Title screen ===== */
+  body.title-mode #top-panel,
+  body.title-mode #board-wrap,
+  body.title-mode #merge-bar,
+  body.title-mode #spawn-bar { display: none; }
+  body:not(.title-mode) #title-screen { display: none; }
+
+  #title-screen {
+    position: fixed; inset: 0;
+    background: #0a1929;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+    z-index: 50;
+  }
+  #title-bg-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .title-content {
+    position: relative;
+    z-index: 2;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 22px;
+    padding: 0 28px;
+    width: 100%;
+    max-width: 380px;
+  }
+  .logo {
+    text-align: center;
+    line-height: 1;
+    text-shadow: 0 4px 18px rgba(13, 71, 161, 0.7);
+  }
+  .logo-sub-top {
+    font-size: 14px;
+    color: #90caf9;
+    letter-spacing: 6px;
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+  .logo-main {
+    font-size: 64px; font-weight: bold;
+    color: #ffe082;
+    letter-spacing: 4px;
+  }
+  .logo-tagline {
+    font-size: 12px;
+    color: rgba(227, 242, 253, 0.55);
+    letter-spacing: 4px;
+    margin-top: 12px;
+  }
+  .title-buttons {
+    display: flex; flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: 14px;
+  }
+  .mode-tabs {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    margin-top: 6px;
+  }
+  .mode-tab {
+    flex: 1;
+    background: rgba(100, 181, 246, 0.10);
+    border: 1px solid rgba(100, 181, 246, 0.30);
+    color: #90caf9;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+  }
+  .mode-tab:active { transform: scale(0.97); }
+  .mode-tab.active {
+    background: #1976d2;
+    border-color: #1976d2;
+    color: white;
+    box-shadow: 0 2px 10px rgba(13, 71, 161, 0.4);
+  }
+
+  /* Rapid mode spawn-progress bar (replaces MERGE button) */
+  body.rapid-mode #merge-bar { display: none; }
+  body.classic-mode #spawn-bar { display: none; }
+  #spawn-bar {
+    position: fixed;
+    bottom: 14px; left: 16px; right: 16px;
+    z-index: 10;
+    height: 6px;
+    background: rgba(100, 181, 246, 0.18);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  #spawn-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ffe082 0%, #f9a825 100%);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 50ms linear;
+  }
+  #spawn-bar-fill.urgent {
+    background: linear-gradient(90deg, #ef5350 0%, #c62828 100%);
+    animation: spawnPulse 0.6s ease-in-out infinite;
+  }
+  @keyframes spawnPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.6; }
+  }
+  .primary-btn {
+    background: #1976d2;
+    color: white;
+    border: none;
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    box-shadow: 0 3px 12px rgba(13, 71, 161, 0.4);
+  }
+  .primary-btn:active { background: #0d47a1; transform: scale(0.98); }
+  .continue-btn {
+    background: #43a047;
+    box-shadow: 0 3px 12px rgba(67, 160, 71, 0.4);
+  }
+  .continue-btn:active { background: #2e7d32; }
+  .secondary-btn {
+    background: rgba(100, 181, 246, 0.12);
+    border: 1px solid rgba(100, 181, 246, 0.35);
+    color: #90caf9;
+    padding: 11px 16px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+  }
+  .secondary-btn:active { background: rgba(100, 181, 246, 0.25); transform: scale(0.98); }
+  .continue-info {
+    font-size: 12px;
+    color: rgba(227, 242, 253, 0.65);
+    text-align: center;
+    line-height: 1.6;
+  }
+  .hidden { display: none !important; }
+
+  /* ===== Modals (records, rules, game over) ===== */
+  .modal {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 1100;
+    padding: 20px;
+  }
+  .modal.active { display: flex; }
+  .modal-inner {
+    position: relative;
+    width: 100%; max-width: 360px;
+    padding: 20px 22px 18px;
+  }
+  .modal-inner h2 {
+    font-size: 20px; color: #90caf9; margin-bottom: 12px;
+    border-bottom: 1px solid rgba(100, 181, 246, 0.3);
+    padding-bottom: 8px;
+  }
+  .modal-inner h3 {
+    font-size: 13px; color: #90caf9; margin: 16px 0 8px;
+    opacity: 0.9;
+  }
+  .records-summary {
+    display: flex; justify-content: space-around; gap: 8px;
+  }
+  .records-summary .stat b { font-size: 20px; }
+  .records-summary .stat b.score-main { color: #ffe082; }
+  .records-table {
+    width: 100%; border-collapse: collapse; font-size: 14px;
+  }
+  .records-table th, .records-table td {
+    padding: 6px 10px; text-align: left;
+    border-bottom: 1px solid rgba(100, 181, 246, 0.18);
+  }
+  .records-table th {
+    color: #90caf9; opacity: 0.8; font-weight: normal; font-size: 12px;
+  }
+  .records-table td {
+    font-variant-numeric: tabular-nums;
+  }
+  .records-table .target { font-weight: bold; }
+  .records-table .none { color: rgba(227, 242, 253, 0.4); }
+  .modal-actions {
+    display: flex; gap: 8px; margin-top: 16px;
+    justify-content: space-between;
+  }
+  .modal-actions button { flex: 1; }
+
+  /* ===== Game over modal ===== */
+  #gameover-modal .modal-inner h2 { color: #ffcdd2; }
+  .gameover-result {
+    display: flex; gap: 24px; justify-content: center;
+    margin: 4px 0 16px;
+  }
+  .best-badge {
+    margin-top: 12px;
+    padding: 8px 14px;
+    background: linear-gradient(180deg, #ffe082 0%, #f9a825 100%);
+    color: #3e2723;
+    border-radius: 999px;
+    font-weight: 800;
+    display: inline-block;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    box-shadow: 0 2px 8px rgba(255, 224, 130, 0.4);
+    animation: badgePop 0.5s ease-out;
+  }
+  .best-badge.hidden { display: none !important; }
+  @keyframes badgePop {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+
+  /* ===== Rules modal content ===== */
+  .howto-content p {
+    margin: 8px 0;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .howto-content b {
+    color: #90caf9;
+  }
+  .howto-content .small {
+    margin-top: 14px;
+    opacity: 0.7;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body class="title-mode classic-mode">
+
+<!-- ===== Title screen ===== -->
+<div id="title-screen">
+  <canvas id="title-bg-canvas"></canvas>
+  <div class="title-content">
+    <div class="logo">
+      <div class="logo-sub-top">BRIDGE × SUM</div>
+      <div class="logo-main">BRIDUM</div>
+      <div class="logo-tagline" id="title-best-line">BEST 0</div>
+    </div>
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="classic">クラシック</button>
+      <button class="mode-tab" data-mode="rapid">ラピッド</button>
+    </div>
+    <div class="title-buttons">
+      <button id="continue-btn" class="primary-btn continue-btn hidden">続きから</button>
+      <button id="start-new-btn" class="primary-btn">新しいゲーム</button>
+      <button id="title-records-btn" class="secondary-btn">記録</button>
+      <button id="title-rules-btn" class="secondary-btn">遊び方</button>
+      <button id="title-sound-btn" class="secondary-btn" aria-label="効果音切替">🔊 効果音 ON</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== In-game top panel ===== -->
+<div id="top-panel" class="panel">
+  <div class="row">
+    <div class="stats">
+      <div class="stat"><span>ターン</span><b id="moves">0</b></div>
+      <div class="stat"><span>最大</span><b id="max-tile">-</b></div>
+      <div class="stat"><span>スコア</span><b id="score" class="score-main">0</b></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="btn-group">
+      <button id="home-btn" class="toggle-btn">HOME</button>
+      <button id="records-btn" class="toggle-btn">記録</button>
+      <button id="rules-btn" class="toggle-btn">遊び方</button>
+      <button id="sound-btn" class="toggle-btn" aria-label="効果音切替">🔊</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Board ===== -->
+<div id="board-wrap">
+  <svg id="board" viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<!-- ===== Toast ===== -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== MERGE button (classic mode only) ===== -->
+<div id="merge-bar">
+  <button class="merge-btn" id="merge-btn">
+    MERGE<span class="ready-badge" id="ready-badge">0</span>
+  </button>
+</div>
+
+<!-- ===== Spawn progress bar (rapid mode only) ===== -->
+<div id="spawn-bar">
+  <div id="spawn-bar-fill"></div>
+</div>
+
+<!-- ===== Records modal ===== -->
+<div id="records-modal" class="modal">
+  <div class="modal-inner panel">
+    <h2>記録 <span id="rec-mode-label" style="font-size:13px; color:rgba(227,242,253,0.55); font-weight:normal; letter-spacing:0.05em;"></span></h2>
+    <div class="records-summary">
+      <div class="stat"><span>ハイスコア</span><b id="rec-highScore" class="score-main">0</b></div>
+      <div class="stat"><span>最大タイル</span><b id="rec-maxTile">0</b></div>
+      <div class="stat"><span>プレイ回数</span><b id="rec-playCount">0</b></div>
+    </div>
+    <h3>目標到達ターン(自己ベスト)</h3>
+    <table class="records-table">
+      <thead><tr><th>目標スコア</th><th>ターン</th></tr></thead>
+      <tbody id="rec-times"></tbody>
+    </table>
+    <div class="modal-actions">
+      <button id="records-close-btn">閉じる</button>
+      <button id="records-clear-btn" class="btn-danger">記録を消去</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Rules modal ===== -->
+<div id="rules-modal" class="modal">
+  <div class="modal-inner panel">
+    <h2>遊び方</h2>
+    <div class="howto-content">
+      <p><b>橋をかける</b>:タイルから別のタイルへスワイプ</p>
+      <p><b>連続橋</b>:そのまま指でなぞって複数のタイルを通る</p>
+      <p><b>橋を消す</b>:同じ橋をもう一度なぞる</p>
+      <p><b>橋の制限</b>:縦か横のライン上のみ。橋同士の交差はできない</p>
+      <p><b>合体</b>:MERGEを押すとつながったタイルが一斉に合体</p>
+      <p><b>合体ルール</b>:1+1=2、1+2=3、3以降は同じ数字どうしで倍々</p>
+      <p><b>得点</b>:タイルの値 × そのウェーブ番号(連鎖が深いほど倍率増)</p>
+      <p class="small">矢印の指す側のタイルに合体する。合体しなかった橋はターン終了時に消える。</p>
+    </div>
+    <div class="modal-actions">
+      <button id="rules-close-btn">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Game over modal ===== -->
+<div id="gameover-modal" class="modal">
+  <div class="modal-inner panel">
+    <h2>ゲーム終了</h2>
+    <div class="gameover-result">
+      <div class="stat"><span>スコア</span><b id="go-score" class="score-main">0</b></div>
+      <div class="stat"><span>最大</span><b id="go-max">0</b></div>
+      <div class="stat"><span>ターン</span><b id="go-turns">0</b></div>
+    </div>
+    <div class="best-badge hidden" id="go-best-badge" style="display:block;text-align:center;margin:0 auto 8px;">★ ベスト更新 ★</div>
+    <div class="modal-actions">
+      <button id="go-new-btn">もう一回</button>
+      <button id="go-title-btn" class="toggle-btn">タイトルへ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ============================================================
+  // === 1. CONFIG ==============================================
+  // ============================================================
+  // 定数・盤面サイズ・ストレージキー・DOM要素ハンドル
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const BOARD = 500;
+  const COLS = 5, ROWS = 5;
+  const CELL = BOARD / COLS;
+  const TILE_R = CELL * 0.36;
+
+  // Milestone target scores. Player achievement is "fastest turns to reach each".
+  const TARGET_SCORES = [100, 500, 1500, 5000, 15000];
+
+  // localStorage keys (records key now holds both modes; saved game key is per-mode)
+  const RECORDS_KEY = 'bridum_records_v2';
+  function savedGameKey(mode) { return 'bridum_saved_' + mode + '_v1'; }
+
+  // Rapid mode tuning (ms)
+  const RAPID_INITIAL_SPAWN_INTERVAL = 2500;  // 2.5s start
+  const RAPID_MIN_SPAWN_INTERVAL = 1000;      // 1.0s floor
+  const RAPID_DECAY_PER_60S = 200;            // shrink interval by 0.2s every 60s
+
+  // DOM handles (resolved once at script load)
+  const svg = document.getElementById('board');
+  const toastEl = document.getElementById('toast');
+  const bgCanvas = document.getElementById('title-bg-canvas');
+  const bgCtx = bgCanvas.getContext('2d');
+
+
+  // ============================================================
+  // === 2. STATE ===============================================
+  // ============================================================
+  // 実行時の可変状態。in-memory のみで管理し、永続化は PERSISTENCE 経由。
+
+  // --- Active game ---
+  let currentMode = 'classic'; // 'classic' | 'rapid'
+  let state = null;     // {tiles, bridges, moves, totalMerges, nextId, score}
+  let gameOver = false;
+  let processing = false; // disables input during merge phase animation
+  let scoreAtGameStart = 0; // highScore snapshot at game start, for "best updated?" detection
+
+  // --- Input / animation ---
+  let dragging = null;  // {chainPath, addedBridges, x, y, valid, pointerId, initialBridgesJSON}
+  let mergedTileIds = new Set(); // for animation
+  let spawnedTileIds = new Set(); // for animation
+
+  // --- Persistent records (mirrored to localStorage, separate per mode) ---
+  // `records` always points to the active mode's record object below.
+  // Switch modes via activateMode(). All record reads/writes go through `records`.
+  function defaultModeRecords() {
+    return {
+      highScore: 0,
+      bestRecord: null,  // { score, maxTile, turns }
+      milestones: {},    // { [target]: turnsToReach }
+      maxTileEver: 0,
+      playCount: 0,
+    };
+  }
+  const allRecords = {
+    classic: defaultModeRecords(),
+    rapid: defaultModeRecords(),
+  };
+  let records = allRecords.classic; // alias to active mode's records
+
+  // --- Save scheduling ---
+  let pendingSaveTimer = null; // debounce save
+
+  // --- In-game notification flags (reset per game) ---
+  let bestNotifiedThisGame = false;
+  let milestonesHitThisGame = new Set(); // values from TARGET_SCORES that fired toast this game
+
+  // --- Rapid mode timing ---
+  let rapidLoop = null;     // requestAnimationFrame id
+  let rapidLastT = 0;
+  let timeToNextSpawn = 0;  // ms until next forced spawn
+  let currentSpawnInterval = 0; // ms (decreases over time as difficulty curve)
+  let rapidElapsedMs = 0;   // total elapsed time in this rapid game
+
+  // --- Title-screen background animation ---
+  let bgTiles = [];
+  let bgRafId = null;
+  let bgLastT = 0;
+
+  // --- Audio (Web Audio API, lazy-init on first use) ---
+  let audioCtx = null;
+  let soundEnabled = true;
+
+
+  // ============================================================
+  // === 3. PERSISTENCE =========================================
+  // ============================================================
+  // localStorage への記録・進行中ゲームの保存/復元。
+
+  function hasStorage() {
+    try {
+      return typeof localStorage !== 'undefined';
+    } catch (e) { return false; }
+  }
+
+  // Records: load all modes' records into allRecords; activate `records` to current mode.
+  function loadRecords() {
+    if (!hasStorage()) return;
+    try {
+      const raw = localStorage.getItem(RECORDS_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      for (const mode of ['classic', 'rapid']) {
+        const m = parsed[mode];
+        if (m && typeof m === 'object') {
+          allRecords[mode] = {
+            highScore: Number(m.highScore) || 0,
+            bestRecord: (m.bestRecord && typeof m.bestRecord.score === 'number') ? m.bestRecord : null,
+            milestones: (m.milestones && typeof m.milestones === 'object') ? m.milestones : {},
+            maxTileEver: Number(m.maxTileEver) || 0,
+            playCount: Number(m.playCount) || 0,
+          };
+        }
+      }
+      records = allRecords[currentMode];
+    } catch (e) {
+      console.warn('records load failed:', e);
+    }
+  }
+
+  // Save all modes' records together (single localStorage key).
+  function saveRecords() {
+    if (!hasStorage()) return;
+    try {
+      localStorage.setItem(RECORDS_KEY, JSON.stringify(allRecords));
+    } catch (e) {
+      console.warn('records save failed:', e);
+    }
+  }
+
+  // Switch active mode. Re-points `records` to the chosen mode's records.
+  // Also updates body class so CSS shows the right UI elements (MERGE button vs spawn bar).
+  function activateMode(mode) {
+    currentMode = mode;
+    records = allRecords[mode];
+    document.body.classList.toggle('classic-mode', mode === 'classic');
+    document.body.classList.toggle('rapid-mode', mode === 'rapid');
+  }
+
+  function maybeUpdateRecords() {
+    let changed = false;
+    // Live high score
+    if (state.score > records.highScore) {
+      records.highScore = state.score;
+      changed = true;
+    }
+    // Best record snapshot
+    const maxTile = state.tiles.length ? Math.max(...state.tiles.map(t => t.value)) : 0;
+    if (!records.bestRecord || state.score > records.bestRecord.score) {
+      records.bestRecord = { score: state.score, maxTile, turns: state.moves };
+      changed = true;
+    }
+    // Max tile ever
+    if (maxTile > records.maxTileEver) {
+      records.maxTileEver = maxTile;
+      changed = true;
+    }
+    // Milestones
+    for (const target of TARGET_SCORES) {
+      if (state.score >= target) {
+        const key = String(target);
+        if (!(key in records.milestones) || state.moves < records.milestones[key]) {
+          records.milestones[key] = state.moves;
+          changed = true;
+        }
+      }
+    }
+    if (changed) saveRecords();
+  }
+
+  function incrementPlayCount() {
+    records.playCount++;
+    saveRecords();
+  }
+
+  // Clear records: clears the CURRENT mode's records only (other mode unaffected).
+  function clearAllRecords() {
+    allRecords[currentMode] = defaultModeRecords();
+    records = allRecords[currentMode];
+    saveRecords();
+  }
+
+  // --- Saved game (per-mode) ---
+  function loadSavedGame(mode) {
+    mode = mode || currentMode;
+    if (!hasStorage()) return null;
+    try {
+      const raw = localStorage.getItem(savedGameKey(mode));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.tiles) && Array.isArray(parsed.bridges)) {
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('saved game load failed:', e);
+    }
+    return null;
+  }
+  function hasSavedGame(mode) {
+    if (!hasStorage()) return false;
+    try {
+      return !!localStorage.getItem(savedGameKey(mode));
+    } catch (e) { return false; }
+  }
+  function scheduleSave() {
+    if (!hasStorage()) return;
+    if (pendingSaveTimer) clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = setTimeout(() => {
+      pendingSaveTimer = null;
+      if (!state || gameOver) return;
+      try {
+        localStorage.setItem(savedGameKey(currentMode), JSON.stringify(state));
+      } catch (e) {
+        console.warn('saved game save failed:', e);
+      }
+    }, 200);
+  }
+  function flushSave() {
+    if (pendingSaveTimer) {
+      clearTimeout(pendingSaveTimer);
+      pendingSaveTimer = null;
+    }
+    if (!hasStorage() || !state || gameOver) return false;
+    try {
+      localStorage.setItem(savedGameKey(currentMode), JSON.stringify(state));
+      return true;
+    } catch (e) {
+      console.warn('saved game flush failed:', e);
+      return false;
+    }
+  }
+  function clearSavedGame() {
+    if (!hasStorage()) return;
+    try { localStorage.removeItem(savedGameKey(currentMode)); }
+    catch (e) { console.warn('saved game clear failed:', e); }
+  }
+
+  // --- Sound setting persistence ---
+  const SOUND_KEY = 'bridum_sound_v1';
+  function loadSoundSetting() {
+    if (!hasStorage()) return;
+    try {
+      const v = localStorage.getItem(SOUND_KEY);
+      if (v === 'off') soundEnabled = false;
+    } catch (e) {}
+  }
+  function saveSoundSetting() {
+    if (!hasStorage()) return;
+    try { localStorage.setItem(SOUND_KEY, soundEnabled ? 'on' : 'off'); } catch (e) {}
+  }
+
+  // ============================================================
+  // === 4. STAGE GENERATION ====================================
+  // ============================================================
+  // 新しい盤面の生成。タイルの初期配置と値の決定。
+
+  function genStage() {
+    const positions = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) positions.push({r, c});
+    shuffle(positions);
+    // Rapid mode starts denser (10-12) for faster ramp-up; classic stays at 7-9.
+    const numTiles = currentMode === 'rapid'
+      ? 10 + Math.floor(Math.random() * 3)  // 10-12
+      : 7 + Math.floor(Math.random() * 3);  // 7-9
+    const tiles = [];
+    // Bias values to ensure mergeability: lots of 1 and 2, some 3
+    const valuePool = [1, 2, 1, 2, 1, 2, 1, 2, 3, 1, 2, 1, 2];
+    shuffle(valuePool);
+    for (let i = 0; i < numTiles; i++) {
+      tiles.push({
+        id: i,
+        r: positions[i].r,
+        c: positions[i].c,
+        value: valuePool[i % valuePool.length]
+      });
+    }
+    state = { tiles, bridges: [], moves: 0, totalMerges: 0, nextId: numTiles, score: 0 };
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+  }
+
+  // ============================================================
+  // === 5. GAME LOGIC ==========================================
+  // ============================================================
+  // ゲームの純粋ルール:橋の幾何制約・合体ルール・ウェーブ実行・終了判定・予測。
+  // DOM を一切触らない(Render と UI から分離されている)。
+
+  // --- Geometry / hit-testing ---
+  function tileXY(t) { return { x: t.c * CELL + CELL / 2, y: t.r * CELL + CELL / 2 }; }
+  function getTile(id) { return state.tiles.find(t => t.id === id); }
+
+  function sameAxis(a, b) { return a.r === b.r || a.c === b.c; }
+
+  // Is there another tile strictly between a and b (on their shared axis)?
+  function hasTileBetween(a, b) {
+    for (const t of state.tiles) {
+      if (t.id === a.id || t.id === b.id) continue;
+      if (a.r === b.r && t.r === a.r) {
+        const lo = Math.min(a.c, b.c), hi = Math.max(a.c, b.c);
+        if (t.c > lo && t.c < hi) return true;
+      } else if (a.c === b.c && t.c === a.c) {
+        const lo = Math.min(a.r, b.r), hi = Math.max(a.r, b.r);
+        if (t.r > lo && t.r < hi) return true;
+      }
+    }
+    return false;
+  }
+
+  // Segment intersection (excluding shared endpoints). Used to detect bridge-bridge crossings.
+  function segCross(p1, p2, p3, p4) {
+    const eq = (x,y,a,b) => Math.abs(x-a) < 0.001 && Math.abs(y-b) < 0.001;
+    if (eq(p1.x,p1.y,p3.x,p3.y) || eq(p1.x,p1.y,p4.x,p4.y) ||
+        eq(p2.x,p2.y,p3.x,p3.y) || eq(p2.x,p2.y,p4.x,p4.y)) return false;
+    const ccw = (A,B,C) => (C.y-A.y)*(B.x-A.x) > (B.y-A.y)*(C.x-A.x);
+    return ccw(p1,p3,p4) !== ccw(p2,p3,p4) && ccw(p1,p2,p3) !== ccw(p1,p2,p4);
+  }
+
+  function findBridge(aId, bId) {
+    return state.bridges.find(br =>
+      (br.a === aId && br.b === bId) || (br.a === bId && br.b === aId)
+    );
+  }
+
+  function canPlaceBridge(a, b) {
+    if (a.id === b.id) return { ok: false, reason: '同じタイル' };
+    if (!sameAxis(a, b)) return { ok: false, reason: '縦か横のライン上だけ' };
+    if (hasTileBetween(a, b)) return { ok: false, reason: '間に他のタイルがあります' };
+    const pa = tileXY(a), pb = tileXY(b);
+    for (const br of state.bridges) {
+      if ((br.a === a.id && br.b === b.id) || (br.a === b.id && br.b === a.id)) continue;
+      const t1 = getTile(br.a), t2 = getTile(br.b);
+      if (!t1 || !t2) continue;
+      if (segCross(pa, pb, tileXY(t1), tileXY(t2))) return { ok: false, reason: '他の橋と交差します' };
+    }
+    return { ok: true };
+  }
+
+  // --- Merge rules ---
+  function canMerge(v1, v2) {
+    if (v1 === 1 && v2 === 1) return true; // 1+1=2 (relaxed rule for difficulty)
+    if ((v1 === 1 && v2 === 2) || (v1 === 2 && v2 === 1)) return true;
+    if (v1 === v2 && v1 >= 3) return true;
+    return false;
+  }
+  function mergedValue(v1, v2) {
+    if (v1 === 1 && v2 === 1) return 2;
+    if ((v1===1&&v2===2) || (v1===2&&v2===1)) return 3;
+    return v1 + v2;
+  }
+  // Merge tile b into tile a (a survives, b removed). All of b's bridges removed.
+  function mergeTiles(a, b) {
+    a.value = mergedValue(a.value, b.value);
+    state.bridges = state.bridges.filter(br => br.a !== b.id && br.b !== b.id);
+    state.tiles = state.tiles.filter(t => t.id !== b.id);
+    mergedTileIds.add(a.id);
+  }
+  // --- Phase execution ---
+  // Wave-based merge resolution.
+  // Wave = a set of pairs that are mergeable RIGHT NOW (no tile shared between pairs in the same wave).
+  // Wave N+1 only contains pairs that became mergeable due to wave N's effects → real cascade.
+  // Score per merge = resulting tile value × wave number (so chains are rewarded).
+  // Returns { count, waves, scoreGained }
+  async function fireMerges() {
+    let totalCount = 0;
+    let waves = 0;
+    let scoreGained = 0;
+
+    while (true) {
+      // Collect current wave: all currently-mergeable pairs with disjoint tile sets
+      const wave = [];
+      const usedIds = new Set();
+      for (const br of state.bridges) {
+        if (usedIds.has(br.a) || usedIds.has(br.b)) continue;
+        const src = getTile(br.a), dst = getTile(br.b);
+        if (src && dst && canMerge(src.value, dst.value)) {
+          wave.push({ src, dst });
+          usedIds.add(br.a);
+          usedIds.add(br.b);
+        }
+      }
+      if (wave.length === 0) break;
+
+      waves++;
+
+      // Fire each merge in this wave with brief stagger so cascade is visible
+      for (const m of wave) {
+        // Re-fetch tiles (defensive)
+        const src = getTile(m.src.id), dst = getTile(m.dst.id);
+        if (!src || !dst) continue;
+        if (!canMerge(src.value, dst.value)) continue;
+        const newValue = mergedValue(src.value, dst.value);
+        const points = newValue * waves;
+        scoreGained += points;
+        mergeTiles(dst, src);
+        totalCount++;
+        // Visual: floating "+points" rising from the surviving tile
+        spawnScoreFloater(points, dst);
+        // Audio: per-merge tone, pitch rises with wave number
+        sndMerge(waves);
+        render();
+        await sleep(currentMode === 'rapid' ? 60 : 100);
+      }
+      // Pause between waves so cascade structure is visible
+      await sleep(currentMode === 'rapid' ? 80 : 150);
+    }
+
+    return { count: totalCount, waves, scoreGained };
+  }
+
+  // Spawn a "+points" SVG text at the tile's position, animated upward and faded out.
+  function spawnScoreFloater(points, tile) {
+    const xy = tileXY(tile);
+    const text = document.createElementNS(SVG_NS, 'text');
+    text.setAttribute('x', xy.x);
+    text.setAttribute('y', xy.y);
+    text.setAttribute('class', 'score-floater');
+    text.textContent = '+' + points;
+    svg.appendChild(text);
+    setTimeout(() => text.remove(), 1100);
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // Spawn N tiles in random empty cells. Values: 1 or 2, biased to balance current counts.
+  function spawnTiles(n) {
+    const occupied = new Set(state.tiles.map(t => t.r * COLS + t.c));
+    const empty = [];
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      if (!occupied.has(r * COLS + c)) empty.push({r, c});
+    }
+    shuffle(empty);
+    const spawnCount = Math.min(n, empty.length);
+    for (let i = 0; i < spawnCount; i++) {
+      // Bias toward whichever of {1, 2} is rarer on the board (anti-stuck heuristic)
+      const ones = state.tiles.filter(t => t.value === 1).length;
+      const twos = state.tiles.filter(t => t.value === 2).length;
+      let value;
+      if (ones < twos - 1) value = 1;
+      else if (twos < ones - 1) value = 2;
+      else value = Math.random() < 0.5 ? 1 : 2;
+      const id = state.nextId++;
+      state.tiles.push({ id, r: empty[i].r, c: empty[i].c, value });
+      spawnedTileIds.add(id);
+    }
+    return spawnCount;
+  }
+
+  // --- Rapid mode: timer-driven spawn loop ---
+  // Spawns tiles at regular intervals (decreasing over time). Game over fires when
+  // the spawn fires but the board has no empty cell.
+  function rapidStart() {
+    if (rapidLoop !== null) return;
+    rapidElapsedMs = 0;
+    currentSpawnInterval = RAPID_INITIAL_SPAWN_INTERVAL;
+    timeToNextSpawn = currentSpawnInterval;
+    rapidLastT = 0;
+    updateSpawnBar();
+    rapidLoop = requestAnimationFrame(rapidFrame);
+  }
+  function rapidStop() {
+    if (rapidLoop !== null) {
+      cancelAnimationFrame(rapidLoop);
+      rapidLoop = null;
+    }
+  }
+  function rapidResumeFromSave() {
+    // Called when continuing a saved rapid game. Restore timing or start fresh.
+    if (rapidLoop !== null) return;
+    if (state && typeof state.rapidElapsedMs === 'number') {
+      rapidElapsedMs = state.rapidElapsedMs;
+    } else {
+      rapidElapsedMs = 0;
+    }
+    if (state && typeof state.timeToNextSpawn === 'number') {
+      timeToNextSpawn = state.timeToNextSpawn;
+    } else {
+      timeToNextSpawn = currentSpawnInterval = RAPID_INITIAL_SPAWN_INTERVAL;
+    }
+    rapidLastT = 0;
+    updateSpawnBar();
+    rapidLoop = requestAnimationFrame(rapidFrame);
+  }
+  function rapidFrame(t) {
+    if (currentMode !== 'rapid' || gameOver || document.body.classList.contains('title-mode')) {
+      rapidLoop = null;
+      return;
+    }
+    if (!rapidLastT) rapidLastT = t;
+    const dt = Math.min(t - rapidLastT, 200); // cap dt against tab unfocus
+    rapidLastT = t;
+
+    // Always tick the clock so the progress bar moves smoothly even during merge animations.
+    // (Previously we paused during merge, which made the bar visually freeze - jarring.)
+    rapidElapsedMs += dt;
+    timeToNextSpawn -= dt;
+
+    // Difficulty curve: shrink interval every 60s, floor at MIN.
+    const decaySteps = Math.floor(rapidElapsedMs / 60000);
+    currentSpawnInterval = Math.max(
+      RAPID_MIN_SPAWN_INTERVAL,
+      RAPID_INITIAL_SPAWN_INTERVAL - decaySteps * RAPID_DECAY_PER_60S
+    );
+
+    // Only execute the spawn (mutate the board) when not processing a merge - otherwise the
+    // animation would race against tile addition. If timer expired during merge, this defers
+    // the spawn to the next frame after merge ends.
+    if (!processing && timeToNextSpawn <= 0) {
+      const success = rapidTrySpawn();
+      if (!success) {
+        rapidGameOver();
+        return;
+      }
+      timeToNextSpawn = currentSpawnInterval;
+      scheduleSave();
+    }
+    updateSpawnBar();
+    rapidLoop = requestAnimationFrame(rapidFrame);
+  }
+  function rapidTrySpawn() {
+    const spawned = spawnTiles(1);
+    if (spawned === 0) return false;
+    sndSpawn();
+    render();
+    setTimeout(() => spawnedTileIds.clear(), 500);
+    return true;
+  }
+  function rapidGameOver() {
+    gameOver = true;
+    rapidStop();
+    const max = state.tiles.length ? Math.max(...state.tiles.map(t => t.value)) : 0;
+    const isBest = state.score > scoreAtGameStart && state.score >= records.highScore;
+    incrementPlayCount();
+    clearSavedGame();
+    sndGameOver();
+    showGameOverScreen(state.score, max, state.moves, isBest);
+  }
+  function updateSpawnBar() {
+    const fillEl = document.getElementById('spawn-bar-fill');
+    if (!fillEl) return;
+    const ratio = Math.max(0, Math.min(1, 1 - timeToNextSpawn / currentSpawnInterval));
+    fillEl.style.width = (ratio * 100) + '%';
+    // Urgent (red pulsing) when board is nearly full
+    const occupied = state ? state.tiles.length : 0;
+    fillEl.classList.toggle('urgent', occupied >= ROWS * COLS - 2);
+  }
+
+  async function mergePhase() {
+    if (processing) return;
+    processing = true;
+    updateStats(); // disables button
+    sndMergeStart();
+
+    const result = await fireMerges();
+    state.totalMerges += result.count;
+    state.score += result.scoreGained;
+
+    if (result.count > 0) {
+      let label;
+      let kind = 'win';
+      if (result.waves >= 2) {
+        label = `連鎖 ×${result.waves}`;
+        kind = 'combo'; // gold gradient for chain
+      } else if (result.count >= 2) {
+        label = `合成 ×${result.count}`;
+      } else {
+        label = `合成`;
+      }
+      toast(`${label}  +${result.scoreGained}`, kind, result.waves >= 2 ? 1500 : 1100);
+    }
+
+    // Brief pause showing post-cascade state before clearing
+    // Rapid mode: shorter pause since we want snappy feel
+    await sleep(currentMode === 'rapid' ? 80 : 200);
+
+    // Clear all leftover bridges (non-fired bridges are wasted; force fresh redraw next turn)
+    state.bridges = [];
+
+    state.moves++;
+
+    if (currentMode === 'classic') {
+      // Classic: spawn tiles after merge phase. Chains reduce spawn (rewards depth).
+      const spawnN = result.waves >= 2 ? 1 : 2;
+      const spawnedCount = spawnTiles(spawnN);
+      if (spawnedCount > 0) sndSpawn();
+    }
+    // Rapid: no spawn here; spawning is handled by the rapid timer.
+
+    // Check in-game notifications BEFORE maybeUpdateRecords, so milestone "best" detection
+    // can compare against the previous milestones state.
+    checkInGameNotifications();
+
+    // Now that turn count has advanced, record any new milestones / bestRecord with correct turn number
+    maybeUpdateRecords();
+    render();
+
+    if (currentMode === 'classic') {
+      // Wait for spawn bounce animation before releasing input
+      await sleep(400);
+      spawnedTileIds.clear();
+    }
+    // Rapid: no spawn, so release processing immediately after render
+    // (score floaters are already in DOM; no animation to protect)
+
+    processing = false;
+    updateStats();
+    if (currentMode === 'classic') {
+      checkEndState();
+    }
+    // Rapid mode: game over only fires when the spawn timer can't place a new tile.
+    if (!gameOver) scheduleSave();
+  }
+
+  // Fire one-shot toasts for high-score breaks and milestone crossings.
+  // Called once per turn (after fireMerges, before maybeUpdateRecords).
+  function checkInGameNotifications() {
+    // High score break: state.score crossed scoreAtGameStart for the first time this game
+    if (!bestNotifiedThisGame && scoreAtGameStart > 0 && state.score > scoreAtGameStart) {
+      bestNotifiedThisGame = true;
+      // Delay slightly so it doesn't collide with the merge toast
+      setTimeout(() => {
+        toast('★ ハイスコア更新!', 'best', 2000);
+        sndBest();
+      }, 600);
+    }
+    // Milestone crossings: only show the HIGHEST newly-crossed target this turn.
+    // Mark all crossed ones so they don't re-fire next turn.
+    let highestCrossed = null;
+    let willBeBest = false;
+    for (const target of TARGET_SCORES) {
+      if (state.score >= target && !milestonesHitThisGame.has(target)) {
+        milestonesHitThisGame.add(target);
+        const prevBest = records.milestones[String(target)];
+        const isBestForThisTarget = (prevBest === undefined) || (state.moves < prevBest);
+        if (!highestCrossed || target > highestCrossed) {
+          highestCrossed = target;
+          willBeBest = isBestForThisTarget;
+        }
+      }
+    }
+    if (highestCrossed !== null) {
+      const suffix = willBeBest ? '  ★ベスト' : '';
+      const message = `${highestCrossed.toLocaleString()}点 突破!${suffix}`;
+      // Stagger after potential best-update toast
+      setTimeout(() => {
+        toast(message, willBeBest ? 'combo' : 'win', 1800);
+        sndMilestone();
+      }, 1200);
+    }
+  }
+
+  // --- Bridge action ---
+  // Handle the user's bridge placement/removal (one swipe segment between two tiles).
+  function processBridgeAction(fromId, toId) {
+    const a = getTile(fromId), b = getTile(toId);
+    if (!a || !b) return;
+
+    const existing = findBridge(fromId, toId);
+    if (existing) {
+      // Toggle off: remove existing bridge regardless of swipe direction
+      state.bridges = state.bridges.filter(br => br !== existing);
+      sndBridgeRemoved();
+    } else {
+      const check = canPlaceBridge(a, b);
+      if (!check.ok) {
+        toast(check.reason, 'error');
+        sndError();
+        return;
+      }
+      // Bridge {a: source, b: destination}. Destination is where merge result will appear.
+      state.bridges.push({ a: fromId, b: toId });
+      sndBridgePlaced();
+    }
+
+    render();
+    updateStats();
+    scheduleSave();
+  }
+
+  // --- End state & merge prediction ---
+  // Determine if the game has ended (board full + no merges possible)
+  function checkEndState() {
+    // Are any merges possible (now or via bridge placement)?
+    let possible = false;
+    for (let i = 0; i < state.tiles.length && !possible; i++) {
+      for (let j = i+1; j < state.tiles.length; j++) {
+        const a = state.tiles[i], b = state.tiles[j];
+        if (canMerge(a.value, b.value)) {
+          if (findBridge(a.id, b.id) || canPlaceBridge(a, b).ok) {
+            possible = true; break;
+          }
+        }
+      }
+    }
+    const boardFull = state.tiles.length >= ROWS * COLS;
+    if (!possible && boardFull) {
+      gameOver = true;
+      const max = Math.max(...state.tiles.map(t => t.value));
+      const isBest = state.score > scoreAtGameStart && state.score >= records.highScore;
+      incrementPlayCount();
+      clearSavedGame();
+      sndGameOver();
+      showGameOverScreen(state.score, max, state.moves, isBest);
+    }
+  }
+
+  // Simulate fireMerges (without animation, without mutating state) to predict
+  // exactly how many merges the player will get if they press MERGE now.
+  // This accounts for shared tiles, chains, and cascades.
+  function predictMergeCount() {
+    const simTiles = state.tiles.map(t => ({ id: t.id, value: t.value }));
+    let simBridges = state.bridges.map(b => ({ a: b.a, b: b.b }));
+    const find = id => simTiles.find(t => t.id === id);
+    let count = 0;
+
+    while (true) {
+      const wave = [];
+      const usedIds = new Set();
+      for (const br of simBridges) {
+        if (usedIds.has(br.a) || usedIds.has(br.b)) continue;
+        const src = find(br.a), dst = find(br.b);
+        if (src && dst && canMerge(src.value, dst.value)) {
+          wave.push({ src, dst });
+          usedIds.add(br.a);
+          usedIds.add(br.b);
+        }
+      }
+      if (wave.length === 0) break;
+      for (const m of wave) {
+        m.dst.value = mergedValue(m.src.value, m.dst.value);
+        // remove src tile
+        const idx = simTiles.indexOf(m.src);
+        if (idx >= 0) simTiles.splice(idx, 1);
+        // remove all bridges to dead src
+        simBridges = simBridges.filter(br => br.a !== m.src.id && br.b !== m.src.id);
+        count++;
+      }
+    }
+    return count;
+  }
+
+
+  // ============================================================
+  // === 6. UI: SCREENS & MODALS ================================
+  // ============================================================
+  // タイトル画面・記録モーダル・遊び方モーダル・ゲーム終了モーダルの
+  // 表示/非表示と内容更新。
+
+  function renderMilestones() {
+    const tbody = document.getElementById('rec-times');
+    tbody.innerHTML = '';
+    for (const target of TARGET_SCORES) {
+      const tr = document.createElement('tr');
+      const tdT = document.createElement('td');
+      tdT.className = 'target';
+      tdT.textContent = target.toLocaleString();
+      const tdV = document.createElement('td');
+      const turns = records.milestones[String(target)];
+      if (turns !== undefined && turns !== null) {
+        tdV.textContent = turns + ' ターン';
+      } else {
+        tdV.textContent = '—';
+        tdV.classList.add('none');
+      }
+      tr.appendChild(tdT);
+      tr.appendChild(tdV);
+      tbody.appendChild(tr);
+    }
+  }
+
+  function showStartScreen() {
+    document.body.classList.add('title-mode');
+    rapidStop();
+    refreshTitleForCurrentMode();
+    // Hide any open modals
+    document.getElementById('records-modal').classList.remove('active');
+    document.getElementById('rules-modal').classList.remove('active');
+    document.getElementById('gameover-modal').classList.remove('active');
+    bgStart();
+  }
+  // Update title-screen UI to reflect the currently active mode (records, continue button, tab state).
+  function refreshTitleForCurrentMode() {
+    document.getElementById('title-best-line').textContent = 'BEST  ' + records.highScore.toLocaleString();
+    document.getElementById('continue-btn').classList.toggle('hidden', !hasSavedGame(currentMode));
+    document.querySelectorAll('.mode-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === currentMode);
+    });
+  }
+  function hideStartScreen() {
+    document.body.classList.remove('title-mode');
+    bgStop();
+  }
+
+  // --- Title-screen background animation ---
+  // Numbered tiles drift slowly across the canvas, with subtle rotation. A few
+  // bridge segments connect aligned tiles for ambient theming.
+  function bgResize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = bgCanvas.clientWidth;
+    const h = bgCanvas.clientHeight;
+    if (w === 0 || h === 0) return;
+    bgCanvas.width = Math.round(w * dpr);
+    bgCanvas.height = Math.round(h * dpr);
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function bgInit() {
+    bgResize();
+    const w = bgCanvas.clientWidth;
+    const h = bgCanvas.clientHeight;
+    if (w === 0 || h === 0) { bgTiles = []; return; }
+    // Mostly fundamental values (1, 2, 3); occasional higher to suggest progression
+    const valuePool = [1, 1, 1, 2, 2, 2, 3, 3, 6, 12, 24];
+    const count = 10;
+    bgTiles = [];
+    for (let i = 0; i < count; i++) {
+      bgTiles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 14, // px/sec, slow drift
+        vy: (Math.random() - 0.5) * 14,
+        r: 28 + Math.random() * 12,
+        value: valuePool[Math.floor(Math.random() * valuePool.length)],
+        rot: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.25,
+      });
+    }
+  }
+  function bgFrame(t) {
+    if (!document.body.classList.contains('title-mode')) {
+      bgRafId = null;
+      return;
+    }
+    if (!bgLastT) bgLastT = t;
+    const dt = Math.min((t - bgLastT) / 1000, 0.1); // cap dt to handle tab unfocus
+    bgLastT = t;
+
+    const w = bgCanvas.clientWidth;
+    const h = bgCanvas.clientHeight;
+    bgCtx.clearRect(0, 0, w, h);
+
+    // Update positions and draw bridges between aligned, close pairs (theme nod)
+    for (const tile of bgTiles) {
+      tile.x += tile.vx * dt;
+      tile.y += tile.vy * dt;
+      tile.rot += tile.rotSpeed * dt;
+      const margin = tile.r + 30;
+      if (tile.x < -margin) tile.x = w + margin;
+      else if (tile.x > w + margin) tile.x = -margin;
+      if (tile.y < -margin) tile.y = h + margin;
+      else if (tile.y > h + margin) tile.y = -margin;
+    }
+
+    // Draw faint bridges between roughly-aligned close pairs
+    bgCtx.strokeStyle = 'rgba(200, 212, 240, 0.18)';
+    bgCtx.lineWidth = 3;
+    bgCtx.lineCap = 'round';
+    for (let i = 0; i < bgTiles.length; i++) {
+      for (let j = i + 1; j < bgTiles.length; j++) {
+        const a = bgTiles[i], b = bgTiles[j];
+        const dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y);
+        // Aligned-ish (nearly same row or column) and close
+        const aligned = (dx < 30 && dy < 220) || (dy < 30 && dx < 220);
+        if (!aligned) continue;
+        bgCtx.beginPath();
+        bgCtx.moveTo(a.x, a.y);
+        bgCtx.lineTo(b.x, b.y);
+        bgCtx.stroke();
+      }
+    }
+
+    // Draw tiles on top of bridges
+    for (const tile of bgTiles) {
+      bgCtx.save();
+      bgCtx.translate(tile.x, tile.y);
+      bgCtx.rotate(tile.rot);
+      bgCtx.fillStyle = tileFill(tile.value);
+      bgCtx.beginPath();
+      bgCtx.arc(0, 0, tile.r, 0, Math.PI * 2);
+      bgCtx.fill();
+      bgCtx.strokeStyle = 'rgba(0,0,0,0.35)';
+      bgCtx.lineWidth = 2;
+      bgCtx.stroke();
+      bgCtx.fillStyle = tileTextColor(tile.value);
+      bgCtx.font = 'bold ' + Math.round(tile.r * 0.85) + 'px "Meiryo UI", sans-serif';
+      bgCtx.textAlign = 'center';
+      bgCtx.textBaseline = 'middle';
+      bgCtx.fillText(String(tile.value), 0, 0);
+      bgCtx.restore();
+    }
+
+    bgRafId = requestAnimationFrame(bgFrame);
+  }
+  function bgStart() {
+    if (bgRafId !== null) return; // already running
+    bgInit();
+    bgLastT = 0;
+    bgRafId = requestAnimationFrame(bgFrame);
+  }
+  function bgStop() {
+    if (bgRafId !== null) {
+      cancelAnimationFrame(bgRafId);
+      bgRafId = null;
+    }
+  }
+  function showGameOverScreen(score, maxTile, turns, isBest) {
+    document.getElementById('go-score').textContent = score.toLocaleString();
+    document.getElementById('go-max').textContent = maxTile;
+    document.getElementById('go-turns').textContent = turns;
+    document.getElementById('go-best-badge').classList.toggle('hidden', !isBest);
+    document.getElementById('gameover-modal').classList.add('active');
+  }
+  function hideGameOverScreen() {
+    document.getElementById('gameover-modal').classList.remove('active');
+  }
+
+  function showRecordsModal() {
+    // Refresh content
+    const modeLabel = currentMode === 'classic' ? 'クラシック' : 'ラピッド';
+    document.getElementById('rec-mode-label').textContent = '/ ' + modeLabel;
+    document.getElementById('rec-highScore').textContent = records.highScore.toLocaleString();
+    document.getElementById('rec-maxTile').textContent = records.maxTileEver || (records.bestRecord ? records.bestRecord.maxTile : 0);
+    document.getElementById('rec-playCount').textContent = records.playCount;
+    renderMilestones();
+    document.getElementById('records-modal').classList.add('active');
+  }
+  function hideRecordsModal() {
+    document.getElementById('records-modal').classList.remove('active');
+  }
+  function showRulesModal() {
+    document.getElementById('rules-modal').classList.add('active');
+  }
+  function hideRulesModal() {
+    document.getElementById('rules-modal').classList.remove('active');
+  }
+
+  // ============================================================
+  // === 7. RENDER ==============================================
+  // ============================================================
+  // SVG盤面の描画。タイル色・テキストサイズ・橋の線分・矢印などの視覚出力。
+
+  function tileFill(v) {
+    if (v === 1) return '#4a7fc8';
+    if (v === 2) return '#d04a6f';
+    if (v === 3) return '#f3f0e8';
+    // Threes-style warm gradient for higher values: 6,12,24,48,96,192,384,768,1536,3072,6144
+    const idx = Math.round(Math.log2(v / 3));
+    const palette = ['#f0c860','#f0a040','#f08020','#f06000','#d04000','#b02000','#902000','#701810','#502010','#301010'];
+    return palette[Math.min(idx - 1, palette.length - 1)];
+  }
+  function tileTextColor(v) {
+    return (v === 3) ? '#2a2a2a' : '#ffffff';
+  }
+  function tileFontSize(v) {
+    const len = String(v).length;
+    if (len <= 2) return 30;
+    if (len === 3) return 24;
+    return 20;
+  }
+
+  function render() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    // Grid background cells
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const rect = document.createElementNS(SVG_NS, 'rect');
+      rect.setAttribute('x', c * CELL + 5);
+      rect.setAttribute('y', r * CELL + 5);
+      rect.setAttribute('width', CELL - 10);
+      rect.setAttribute('height', CELL - 10);
+      rect.setAttribute('rx', 8);
+      rect.setAttribute('class', 'grid-cell');
+      svg.appendChild(rect);
+    }
+
+    // Bridges (single line with arrowhead pointing to destination)
+    for (const br of state.bridges) {
+      const a = getTile(br.a), b = getTile(br.b);
+      if (!a || !b) continue;
+      const pa = tileXY(a), pb = tileXY(b);
+      const ready = canMerge(a.value, b.value);
+      const cls = 'bridge-line' + (ready ? ' bridge-ready' : '');
+
+      const line = document.createElementNS(SVG_NS, 'line');
+      line.setAttribute('x1', pa.x); line.setAttribute('y1', pa.y);
+      line.setAttribute('x2', pb.x); line.setAttribute('y2', pb.y);
+      line.setAttribute('class', cls);
+      svg.appendChild(line);
+
+      // Arrowhead at destination side, sized to point inside the tile circle
+      const dx = pb.x - pa.x, dy = pb.y - pa.y;
+      const L = Math.hypot(dx, dy) || 1;
+      const ux = dx / L, uy = dy / L;
+      // Arrow tip just outside destination tile circle
+      const tipX = pb.x - ux * (TILE_R + 6);
+      const tipY = pb.y - uy * (TILE_R + 6);
+      const baseX = tipX - ux * 12;
+      const baseY = tipY - uy * 12;
+      // Perpendicular for arrow wings
+      const px = -uy * 7, py = ux * 7;
+      const arrow = document.createElementNS(SVG_NS, 'polygon');
+      arrow.setAttribute('points',
+        `${tipX},${tipY} ${baseX + px},${baseY + py} ${baseX - px},${baseY - py}`);
+      arrow.setAttribute('class', cls);
+      arrow.setAttribute('fill', ready ? '#f5d358' : 'var(--bridge)');
+      arrow.setAttribute('stroke', 'none');
+      arrow.style.pointerEvents = 'none';
+      svg.appendChild(arrow);
+    }
+
+    // Ghost line during drag (from chain tail to current finger position)
+    if (dragging) {
+      const tailId = dragging.chainPath[dragging.chainPath.length - 1];
+      const from = getTile(tailId);
+      if (from) {
+        const p = tileXY(from);
+        const line = document.createElementNS(SVG_NS, 'line');
+        line.setAttribute('x1', p.x); line.setAttribute('y1', p.y);
+        line.setAttribute('x2', dragging.x); line.setAttribute('y2', dragging.y);
+        line.setAttribute('class', 'ghost-line' + (dragging.valid === false ? ' invalid' : ''));
+        svg.appendChild(line);
+      }
+    }
+
+    // Tiles
+    for (const t of state.tiles) {
+      const p = tileXY(t);
+      const g = document.createElementNS(SVG_NS, 'g');
+      let cls = 'tile';
+      if (dragging && dragging.chainPath.includes(t.id)) cls += ' tile-grabbed';
+      if (mergedTileIds.has(t.id)) cls += ' tile-merged';
+      if (spawnedTileIds.has(t.id)) cls += ' tile-spawned';
+      g.setAttribute('class', cls);
+      g.dataset.id = t.id;
+
+      const circle = document.createElementNS(SVG_NS, 'circle');
+      circle.setAttribute('cx', p.x);
+      circle.setAttribute('cy', p.y);
+      circle.setAttribute('r', TILE_R);
+      circle.setAttribute('fill', tileFill(t.value));
+      circle.setAttribute('class', 'tile-circle');
+      g.appendChild(circle);
+
+      const text = document.createElementNS(SVG_NS, 'text');
+      text.setAttribute('x', p.x);
+      text.setAttribute('y', p.y);
+      text.setAttribute('class', 'tile-text');
+      text.setAttribute('font-size', tileFontSize(t.value));
+      text.setAttribute('fill', tileTextColor(t.value));
+      text.textContent = t.value;
+      g.appendChild(text);
+
+      svg.appendChild(g);
+    }
+
+    // Clear merged set after one frame
+    requestAnimationFrame(() => {
+      if (mergedTileIds.size > 0) {
+        setTimeout(() => { mergedTileIds.clear(); }, 400);
+      }
+    });
+  }
+
+
+  // ============================================================
+  // === 8. UI: STATS, TOAST & AUDIO ============================
+  // ============================================================
+  // ヘッダ部のスコア表示・トースト通知・効果音(Web Audio API合成)。
+
+  function updateSoundButtons() {
+    const label = soundEnabled ? '🔊 効果音 ON' : '🔇 効果音 OFF';
+    const icon  = soundEnabled ? '🔊' : '🔇';
+    const btn = document.getElementById('sound-btn');
+    const tbtn = document.getElementById('title-sound-btn');
+    if (btn)  btn.textContent  = icon;
+    if (tbtn) tbtn.textContent = label;
+  }
+  function toggleSound() {
+    soundEnabled = !soundEnabled;
+    saveSoundSetting();
+    updateSoundButtons();
+  }
+  function updateStats() {
+    const max = state.tiles.length ? Math.max(...state.tiles.map(t => t.value)) : '-';
+    document.getElementById('max-tile').textContent = max;
+    document.getElementById('score').textContent = state.score.toLocaleString();
+    const predicted = predictMergeCount();
+    document.getElementById('ready-badge').textContent = predicted;
+    const mergeBtn = document.getElementById('merge-btn');
+    mergeBtn.disabled = processing;
+    mergeBtn.classList.toggle('ready', predicted > 0 && !processing);
+    document.getElementById('home-btn').disabled = processing;
+    document.getElementById('records-btn').disabled = processing;
+    document.getElementById('rules-btn').disabled = processing;
+  }
+
+  let toastT = null;
+  function toast(text, kind, duration = 1400) {
+    toastEl.textContent = text;
+    toastEl.className = 'toast show' + (kind ? ' ' + kind : '');
+    if (toastT) clearTimeout(toastT);
+    toastT = setTimeout(() => { toastEl.classList.remove('show'); }, duration);
+  }
+
+  // --- Audio: low-level synth ---
+  // Lazy-initialize AudioContext (mobile browsers require user gesture before playback).
+  // ensureAudio() is called from each sound function and handles resume() if suspended.
+  function ensureAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) {
+        soundEnabled = false;
+        return null;
+      }
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
+  // Play a single oscillator tone with optional pitch slide and start delay.
+  function playTone(freq, duration, options = {}) {
+    if (!soundEnabled) return;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const t = ctx.currentTime + (options.delay || 0);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = options.type || 'sine';
+    osc.frequency.setValueAtTime(freq, t);
+    if (options.toFreq !== undefined) {
+      osc.frequency.exponentialRampToValueAtTime(options.toFreq, t + duration);
+    }
+    const vol = options.volume !== undefined ? options.volume : 0.12;
+    // Quick attack to avoid clicks, exponential decay
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + duration + 0.05);
+  }
+
+  // --- Audio: game-event sound effects ---
+  function sndBridgePlaced() {
+    playTone(660, 0.08, { type: 'triangle', volume: 0.10 });
+  }
+  function sndBridgeRemoved() {
+    playTone(440, 0.06, { type: 'sine', volume: 0.08 });
+  }
+  function sndError() {
+    playTone(200, 0.15, { type: 'sawtooth', volume: 0.06, toFreq: 160 });
+  }
+  function sndMerge(wave) {
+    // Pitch rises with wave number to make cascades audibly satisfying
+    const baseFreq = 500 + Math.min((wave || 1) - 1, 5) * 90;
+    playTone(baseFreq, 0.16, {
+      type: 'triangle',
+      volume: 0.13,
+      toFreq: baseFreq * 0.92,
+    });
+  }
+  function sndSpawn() {
+    playTone(900, 0.05, { type: 'sine', volume: 0.06 });
+  }
+  function sndMergeStart() {
+    playTone(380, 0.08, { type: 'triangle', volume: 0.12, toFreq: 460 });
+  }
+  function sndGameOver() {
+    // Descending: A4, F#4, D#4, C4
+    const notes = [440, 370, 311, 261];
+    for (let i = 0; i < notes.length; i++) {
+      playTone(notes[i], 0.22, { type: 'triangle', volume: 0.13, delay: i * 0.13 });
+    }
+  }
+  function sndBest() {
+    // C major arpeggio: C5, E5, G5, C6
+    const notes = [523, 659, 784, 1047];
+    for (let i = 0; i < notes.length; i++) {
+      playTone(notes[i], 0.14, { type: 'triangle', volume: 0.14, delay: i * 0.07 });
+    }
+  }
+  function sndMilestone() {
+    // C-E ascending two-note
+    playTone(523, 0.12, { type: 'triangle', volume: 0.13 });
+    playTone(659, 0.12, { type: 'triangle', volume: 0.13, delay: 0.07 });
+  }
+
+
+  // ============================================================
+  // === 9. INPUT ===============================================
+  // ============================================================
+  // Pointer events: drag detection, chain swipe, bridge placement.
+
+  function svgPoint(evt) {
+    const rect = svg.getBoundingClientRect();
+    return {
+      x: (evt.clientX - rect.left) / rect.width * BOARD,
+      y: (evt.clientY - rect.top) / rect.height * BOARD
+    };
+  }
+  function tileAt(p) {
+    // Cell-based detection: if the point is in a cell that contains a tile, return it.
+    const c = Math.floor(p.x / CELL);
+    const r = Math.floor(p.y / CELL);
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
+    return state.tiles.find(t => t.r === r && t.c === c) || null;
+  }
+
+  function onPointerDown(evt) {
+    if (processing || gameOver) return;
+    if (evt.button !== undefined && evt.button !== 0) return; // primary button only
+    evt.preventDefault();
+    const p = svgPoint(evt);
+    const t = tileAt(p);
+    if (t) {
+      try { svg.setPointerCapture(evt.pointerId); } catch (e) {}
+      dragging = {
+        x: p.x, y: p.y, valid: true, pointerId: evt.pointerId,
+        chainPath: [t.id],            // tile ids visited in this gesture
+        addedBridges: [],             // bridges added during this gesture (for backtracking)
+        initialBridgesJSON: JSON.stringify(state.bridges)
+      };
+      render();
+    }
+  }
+  function onPointerMove(evt) {
+    if (!dragging || dragging.pointerId !== evt.pointerId) return;
+    evt.preventDefault();
+    const p = svgPoint(evt);
+    dragging.x = p.x;
+    dragging.y = p.y;
+
+    const t = tileAt(p);
+    if (t) {
+      const tail = dragging.chainPath[dragging.chainPath.length - 1];
+      const prev = dragging.chainPath[dragging.chainPath.length - 2];
+
+      if (t.id === tail) {
+        // Still on tail tile, no change
+      } else if (t.id === prev) {
+        // Backtracking: undo the last bridge addition (only if we added it this gesture)
+        const lastAddedBr = dragging.addedBridges[dragging.addedBridges.length - 1];
+        if (lastAddedBr) {
+          state.bridges = state.bridges.filter(br => br !== lastAddedBr);
+          dragging.addedBridges.pop();
+        }
+        dragging.chainPath.pop();
+      } else {
+        // Entered a new tile; try to extend the chain
+        const tailTile = getTile(tail);
+        if (tailTile) {
+          const existing = findBridge(tail, t.id);
+          if (existing) {
+            // Already bridged: just extend chain visually (no new bridge)
+            dragging.chainPath.push(t.id);
+          } else {
+            const check = canPlaceBridge(tailTile, t);
+            if (check.ok) {
+              const newBr = { a: tail, b: t.id };
+              state.bridges.push(newBr);
+              dragging.addedBridges.push(newBr);
+              dragging.chainPath.push(t.id);
+            }
+            // Cannot extend (different axis, blocked, or crossing): silently ignore
+          }
+        }
+      }
+    }
+
+    // Validity for ghost line
+    const tailNow = dragging.chainPath[dragging.chainPath.length - 1];
+    const tailTile = getTile(tailNow);
+    const hover = tileAt(p);
+    if (hover && hover.id !== tailNow && tailTile) {
+      const existing = findBridge(tailNow, hover.id);
+      dragging.valid = !!existing || canPlaceBridge(tailTile, hover).ok;
+    } else {
+      dragging.valid = true;
+    }
+    render();
+  }
+  function onPointerUp(evt) {
+    if (!dragging || dragging.pointerId !== evt.pointerId) return;
+    evt.preventDefault();
+
+    // Detect if state.bridges changed during this gesture
+    const finalJSON = JSON.stringify(state.bridges);
+    let changed = finalJSON !== dragging.initialBridgesJSON;
+
+    // Special case: single segment, no addition (existing bridge traversed) → toggle off
+    if (!changed && dragging.chainPath.length === 2) {
+      const [aId, bId] = dragging.chainPath;
+      const existing = findBridge(aId, bId);
+      if (existing) {
+        state.bridges = state.bridges.filter(br => br !== existing);
+        changed = true;
+      }
+    }
+
+    try { svg.releasePointerCapture(evt.pointerId); } catch (e) {}
+    dragging = null;
+
+    render();
+    updateStats();
+    if (changed) scheduleSave();
+
+    // Rapid mode: bridges fire immediately on pointer up.
+    // Only fire if there are merging bridges (predicted > 0) — otherwise the bridges
+    // would just be wasted on a non-merging draw, which would feel punishing.
+    if (currentMode === 'rapid' && state.bridges.length > 0 && predictMergeCount() > 0) {
+      mergePhase();
+    }
+  }
+  function onPointerCancel(evt) {
+    if (dragging && dragging.pointerId === evt.pointerId) {
+      try { svg.releasePointerCapture(evt.pointerId); } catch (e) {}
+      dragging = null;
+      render();
+    }
+  }
+
+  svg.addEventListener('pointerdown', onPointerDown);
+  svg.addEventListener('pointermove', onPointerMove);
+  svg.addEventListener('pointerup', onPointerUp);
+  svg.addEventListener('pointercancel', onPointerCancel);
+  // Prevent context menu on long-press
+  svg.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Resize background canvas on viewport change
+  window.addEventListener('resize', () => {
+    if (document.body.classList.contains('title-mode')) {
+      bgResize();
+    }
+  });
+
+
+  // ============================================================
+  // === 10. FLOW ===============================================
+  // ============================================================
+  // ゲームのライフサイクル制御:新規開始・再開・タイトル復帰・ホーム遷移。
+  // UI と GAME LOGIC を組み合わせる「司令塔」レイヤ。
+
+  function newStage() {
+    genStage();
+    scoreAtGameStart = records.highScore;
+    gameOver = false;
+    bestNotifiedThisGame = false;
+    milestonesHitThisGame = new Set();
+    rapidStop(); // ensure no leftover timer
+    hideStartScreen();
+    hideGameOverScreen();
+    render();
+    updateStats();
+    scheduleSave();
+    if (currentMode === 'rapid') rapidStart();
+  }
+  function continueGame(saved) {
+    state = saved;
+    scoreAtGameStart = records.highScore;
+    gameOver = false;
+    // For a resumed game, mark already-crossed milestones as hit so we don't re-toast them
+    bestNotifiedThisGame = state.score > scoreAtGameStart;
+    milestonesHitThisGame = new Set(TARGET_SCORES.filter(t => state.score >= t));
+    rapidStop();
+    hideStartScreen();
+    hideGameOverScreen();
+    render();
+    updateStats();
+    if (currentMode === 'rapid') rapidResumeFromSave();
+  }
+  function backToTitle() {
+    rapidStop();
+    hideGameOverScreen();
+    showStartScreen();
+  }
+  // HOME button: save current progress and return to start screen.
+  // Even if save fails, the in-memory state is still valid for resume during this session.
+  function goHome() {
+    if (gameOver) {
+      backToTitle();
+      return;
+    }
+    // For rapid mode, save the timer state so we can resume properly
+    if (currentMode === 'rapid' && state) {
+      state.rapidElapsedMs = rapidElapsedMs;
+      state.timeToNextSpawn = timeToNextSpawn;
+    }
+    flushSave();
+    rapidStop();
+    showStartScreen();
+  }
+
+
+  // ============================================================
+  // === 11. MAIN: BINDINGS & INIT ==============================
+  // ============================================================
+  // DOM要素にイベントハンドラを結線し、初期化する。
+
+  // Buttons
+  document.getElementById('home-btn').addEventListener('click', goHome);
+  document.getElementById('records-btn').addEventListener('click', showRecordsModal);
+  document.getElementById('rules-btn').addEventListener('click', showRulesModal);
+  document.getElementById('merge-btn').addEventListener('click', mergePhase);
+  document.getElementById('sound-btn').addEventListener('click', toggleSound);
+  document.getElementById('title-sound-btn').addEventListener('click', toggleSound);
+
+  // Mode tabs (title screen)
+  document.querySelectorAll('.mode-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activateMode(btn.dataset.mode);
+      refreshTitleForCurrentMode();
+    });
+  });
+
+  // Start screen buttons
+  document.getElementById('start-new-btn').addEventListener('click', () => {
+    newStage();
+  });
+  document.getElementById('continue-btn').addEventListener('click', () => {
+    const saved = loadSavedGame(currentMode);
+    if (saved) {
+      continueGame(saved);
+    } else if (state && !gameOver && (state.moves > 0 || state.score > 0 || state.bridges.length > 0)) {
+      continueGame(state);
+    } else {
+      newStage();
+    }
+  });
+  document.getElementById('title-records-btn').addEventListener('click', showRecordsModal);
+  document.getElementById('title-rules-btn').addEventListener('click', showRulesModal);
+
+  // Modal close buttons
+  document.getElementById('records-close-btn').addEventListener('click', hideRecordsModal);
+  document.getElementById('rules-close-btn').addEventListener('click', hideRulesModal);
+  document.getElementById('records-clear-btn').addEventListener('click', () => {
+    const modeName = currentMode === 'classic' ? 'クラシック' : 'ラピッド';
+    if (confirm(`${modeName}モードの記録を全て削除します。よろしいですか?(もう一方のモードの記録は影響を受けません)`)) {
+      clearAllRecords();
+      showRecordsModal(); // refresh display
+      refreshTitleForCurrentMode();
+    }
+  });
+
+  // Game over screen buttons
+  document.getElementById('go-new-btn').addEventListener('click', () => {
+    newStage();
+  });
+  document.getElementById('go-title-btn').addEventListener('click', backToTitle);
+
+  // --- Init (kicks off everything) ---
+  function init() {
+    activateMode('classic');
+    genStage();
+    loadRecords();
+    loadSoundSetting();
+    activateMode(currentMode);
+    updateSoundButtons();
+    render();
+    updateStats();
+    showStartScreen();
+  }
+  init();
+})();
+</script>
+</body>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</html>
